@@ -54,7 +54,7 @@ namespace tLockTest
       var sigmaHexString = "a5d07c0071b4e386b3ae09206522253c68fefe8490ad59ecc44a7dd0d0745be91da5779e2247a82403fbc0cb9a34cb61";
       checkFirma(round, pkHexString, sigmaHexString);
 
-      //https://testnet-api.drand.cloudflare.com/f3827d772c155f95a9fda8901ddd59591a082df5ac6efe3a479ddb1f5eeb202c/public/11775741
+      //https://testnet-api.drand.cloudflare.com/f3827d772c155f95a9fda8901ddd59591a082df5ac6efe3a479ddb1f5eeb202c/info
       //https://testnet-api.drand.cloudflare.com/f3827d772c155f95a9fda8901ddd59591a082df5ac6efe3a479ddb1f5eeb202c/public/11775741
       Console.WriteLine("=== KEYS AND SIGNS FROM DRAND (SCHEMA: bls-unchained-on-g1) ===");
       round = 11775741;
