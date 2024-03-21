@@ -4,8 +4,10 @@
   {
     static void Main(string[] args)
     {
-      //Test_tlock.RunTest_CheckFirma();
-      Test_tlock.TestHash();
+      Test_tlock.RunTest_CheckFirma();
+
+      //MCLTest.TestMain();
+      //Test_tlock.TestHash();
       //PoC_Tlock.Run_PoC();
     }
   }
