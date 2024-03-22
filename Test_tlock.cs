@@ -39,7 +39,7 @@ namespace tLockTest
       //firma il messaggio s = sk H(msg)
       var rbytes_le = BitConverter.GetBytes(round);   //--> little-endian
       var rbytes_be = rbytes_le.Reverse().ToArray();  //--> big-endian
-      var rHash = Utils.GetSHA256(rbytes_be);
+      var rHash = CryptoUtils.GetSHA256(rbytes_be);
       var h = new G1();
       h.HashAndMapTo(rHash);
 
@@ -52,8 +52,6 @@ namespace tLockTest
       //Test di una firma BLS
       Init(BLS12_381);
       ETHmode();
-      G1setDst("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
-      //G2setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
       
       //https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info
       //https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/5928395
@@ -61,6 +59,7 @@ namespace tLockTest
       ulong round = 5928395;
       var pkHexString = "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a";
       var sigmaHexString = "a5d07c0071b4e386b3ae09206522253c68fefe8490ad59ecc44a7dd0d0745be91da5779e2247a82403fbc0cb9a34cb61";
+      G1setDst("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
       checkFirma(round, pkHexString, sigmaHexString);      
 
       
@@ -70,18 +69,21 @@ namespace tLockTest
       round = 11775741;
       pkHexString = "8f6e58c3dbc6d7e58e32baee6881fecc854161b4227c40b01ae7f0593cea964599648f91a0fa2d6b489a7fb0a552b959014007e05d0c069991be4d064bbe28275bd4c3a3cabf16c48f86f4566909dd6eb6d0e84fd6069c414562ca6abf5fdc13";
       sigmaHexString = "82036f6bcd6f626ba4526edb9918a296877579707f49a494723d865d27d42d84dee9cce84a37c21fe6d365ad9fae75db";
+      G1setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_"); //su alcune chain drand viene usato erroneamente un DST sbagliato, refuso post switch G1<->G2
       checkFirma(round, pkHexString, sigmaHexString);
 
       Console.WriteLine("=== KEYS AND SIGNS FROM DRAND (SCHEMA: bls-unchained-g1-rfc9380) ===");
       round = 5358915;
       pkHexString = "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a";
       sigmaHexString = "95f058cbd1294bc3fa28647dabded06d50b543643fb04e1cb2c5b6204daf20935782f7cae5fa7718cf87b4c43d108842";
+      G1setDst("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
       checkFirma(round, pkHexString, sigmaHexString);
 
       Console.WriteLine("=== KEYS AND SIGNS FROM KYBER LIB TEST ===");
       round = 1;
       pkHexString = "a0b862a7527fee3a731bcb59280ab6abd62d5c0b6ea03dc4ddf6612fdfc9d01f01c31542541771903475eb1ec6615f8d0df0b8b6dce385811d6dcf8cbefb8759e5e616a3dfd054c928940766d9a5b9db91e3b697e5d70a975181e007f87fca5e";
       sigmaHexString = "9544ddce2fdbe8688d6f5b4f98eed5d63eee3902e7e162050ac0f45905a55657714880adabe3c3096b92767d886567d0";
+      G1setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_"); //su alcune chain drand viene usato erroneamente un DST sbagliato, refuso post switch G1<->G2
       checkFirma(round, pkHexString, sigmaHexString);
       
 
@@ -89,9 +91,11 @@ namespace tLockTest
       G2 pk;
       G1 sigma;
       round = 5936087; //LeagueOfEntropy.GetRound(DateTime.Now);
+      G1setDst("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
       GetRandomSigma(round, out pk, out sigma);
       pkHexString = pk.ToCompressedPoint();
       sigmaHexString = sigma.ToCompressedPoint();
+      
       checkFirma(round, pkHexString, sigmaHexString);
     }
 
@@ -105,14 +109,14 @@ namespace tLockTest
 
       Console.WriteLine($"round: {round}");
       var pk = new G2();
-      pk.Deserialize(Utils.FromHexStr(pkHexString));
+      pk.Deserialize(CryptoUtils.FromHexStr(pkHexString));
       Console.WriteLine($"pkHexString:{pkHexString}");
       Console.WriteLine($"pk: {pk.ToCompressedPoint()}");
       Console.WriteLine($"pk isValid: {pk.IsValid()} ");
       Console.WriteLine($"pk isZero: {pk.IsZero()} ");
 
       var sigma = new G1();
-      sigma.Deserialize(Utils.FromHexStr(sigmaHexString));
+      sigma.Deserialize(CryptoUtils.FromHexStr(sigmaHexString));
       Console.WriteLine($"sigmaHexString:{sigmaHexString}");
       Console.WriteLine($"sigma: {sigma.ToCompressedPoint()}");
       Console.WriteLine($"sigma isValid: {sigma.IsValid()} ");
@@ -121,48 +125,6 @@ namespace tLockTest
       var chk = checkFirma(round, pk, sigma);
       Console.WriteLine($"=== CHECK SIGN: {chk} ===\n\n");
     }
-    public static void TestHash()
-    {
-      //Init(BLS12_381);
-      //ETHmode();
-      //G1setDst("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
-      //G2setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
-      //ulong round = 5936087;
-      //var hash_drand ="[21 92 47 170 100 63 29 97 91 228 30 34 183 66 173 76 44 47 229 143 57 129 247 243 155 13 192 65 214 0 62 206]";
-
-      ulong round = 11775741;
-      var hash_drand = "[228 140 83 149 75 247 97 174 150 227 186 83 215 3 82 6 176 178 133 157 101 92 111 250 61 246 178 22 165 248 155 140]";
-
-      var rbytes_le = BitConverter.GetBytes(round);   // --> little-endian
-      var rbytes_be = rbytes_le.Reverse().ToArray();  // --> big-endian
-      var bytes32_le = new byte[32];
-      var rHash = Utils.GetSHA256(rbytes_be);
-      rbytes_le.CopyTo(bytes32_le, 0);
-
-      //var hash_BC_1 = Utils.GetSHA256(rbytes_le);
-      var hash_BC_2 = Utils.GetSHA256(rbytes_be);
-
-      var hash_mcl_1 = new Fr();
-      var hash_mcl_2 = new Fr();
-      var hash_mcl_3 = new Fr();
-      var hash_mcl_4 = new Fr();
-      hash_mcl_1.SetHashOf(rbytes_le);
-      hash_mcl_2.SetHashOf(rbytes_be);
-      hash_mcl_3.SetHashOf(bytes32_le);
-      hash_mcl_4.SetHashOf(bytes32_le.Reverse().ToArray());
-
-      Console.WriteLine($"round: {round}");
-      Console.Write($"rbytes_le:\n"); rbytes_le.Print();
-      Console.Write($"rbytes_be:\n"); rbytes_be.Print();
-      Console.WriteLine($"\nhash drand: \n{hash_drand}");
-      //Console.Write($"\nhash BouncyCastle (input littl-endian 8 bytes fix length):\n"); hash_BC_1.Print();
-      Console.Write($"\nhash BouncyCastle (input big-endian 8 bytes fix length):\n"); hash_BC_2.Print();
-      Console.Write($"\nhash Herumi/MCL (input littl-endian 8 bytes fix length):\n"); hash_mcl_1.Serialize().Print();
-      Console.Write($"\nhash Herumi/MCL (input big-endian 8 bytes fix length):\n"); hash_mcl_2.Serialize().Print();
-      Console.Write($"\nhash Herumi/MCL (input littl-endian 32 bytes fix length):\n"); hash_mcl_3.Serialize().Print();
-      Console.Write($"\nhash Herumi/MCL (input big-endian 32 bytes fix length):\n"); hash_mcl_4.Serialize().Print();
-    }
-
     public static bool checkFirma(ulong round, G2 pk, G1 sigma)
     {
       //Init(BLS12_381);
@@ -176,8 +138,7 @@ namespace tLockTest
       
       var rbytes_le = BitConverter.GetBytes(round);   //--> little-endian
       var rbytes_be = rbytes_le.Reverse().ToArray();  //--> big-endian
-      var rHash = Utils.GetSHA256(rbytes_be);
-
+      var rHash = CryptoUtils.GetSHA256(rbytes_be);
       var h = new G1();
       h.HashAndMapTo(rHash);
 
@@ -201,21 +162,21 @@ namespace tLockTest
       */
     }
 
-    public static void checkFirmaOnG2(int round, string pkHexString, string sigmaHexString)
+    public static void checkFirmaOnG2(ulong round, string pkHexString, string sigmaHexString)
     {
       //Init(BLS12_381);
       //ETHmode();
 
       Console.WriteLine($"round: {round}");
       var pk = new G1();
-      pk.Deserialize(Utils.FromHexStr(pkHexString));
+      pk.Deserialize(CryptoUtils.FromHexStr(pkHexString));
       Console.WriteLine($"pkHexString:{pkHexString}");
       Console.WriteLine($"pk: {pk.ToCompressedPoint()}");
       Console.WriteLine($"pk isValid: {pk.IsValid()} ");
       Console.WriteLine($"pk isZero: {pk.IsZero()} ");
 
       var sigma = new G2();
-      sigma.Deserialize(Utils.FromHexStr(sigmaHexString));
+      sigma.Deserialize(CryptoUtils.FromHexStr(sigmaHexString));
       Console.WriteLine($"sigmaHexString:{sigmaHexString}");
       Console.WriteLine($"sigma: {sigma.ToCompressedPoint()}");
       Console.WriteLine($"sigma isValid: {sigma.IsValid()} ");
@@ -224,7 +185,7 @@ namespace tLockTest
       var chk = checkFirmaOnG2(round, pk, sigma);
       Console.WriteLine($"=== CHECK SIGN: {chk} ===\n\n");
     }
-    public static bool checkFirmaOnG2(int round, G1 pk, G2 sigma)
+    public static bool checkFirmaOnG2(ulong round, G1 pk, G2 sigma)
     {
       //Init(BLS12_381);
       //ETHmode();
@@ -235,7 +196,7 @@ namespace tLockTest
 
       var rbytes_le = BitConverter.GetBytes(round);   //--> little-endian
       var rbytes_be = rbytes_le.Reverse().ToArray();  //--> big-endian
-      var rHash = Utils.GetSHA256(rbytes_be);
+      var rHash = CryptoUtils.GetSHA256(rbytes_be);
       var h = new G2();
       h.HashAndMapTo(rHash);
 

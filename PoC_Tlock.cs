@@ -3,6 +3,7 @@ using Org.BouncyCastle.Math;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using static mcl.MCL;
@@ -55,7 +56,7 @@ namespace tLockTest
         "signature": "95f058cbd1294bc3fa28647dabded06d50b543643fb04e1cb2c5b6204daf20935782f7cae5fa7718cf87b4c43d108842"
       }
       */
-      var round = 5358915;
+      ulong round = 5358915;
       var PKLOEstring = "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a";
       var sigLOEstring = "95f058cbd1294bc3fa28647dabded06d50b543643fb04e1cb2c5b6204daf20935782f7cae5fa7718cf87b4c43d108842";
       Console.WriteLine($"=== DATI LOE ===");
@@ -99,7 +100,7 @@ namespace tLockTest
       */
       #endregion
 
-      var round = 18925798;
+      ulong round = 18925798;
       var PKLOEstring = "8200fc249deb0148eb918d6e213980c5d01acd7fc251900d9260136da3b54836ce125172399ddc69c4e3e11429b62c11";
       var sigLOEstring = "adb9c7c781edc13a5a48e0887b23cc33f4164cb715967b0d11d518980c564eefe7a6a44c5d1c7d2158b20f75fc5bf35507bafd20b355abc62443c01e6343c2574435e4ef437ca07cfa946cdd2537dc76aa3b9af6c718561089462f6a2bae6189";
       Console.WriteLine($"=== DATI LOE ===");
@@ -119,19 +120,26 @@ namespace tLockTest
       Console.WriteLine($"decipherText: {decipherText}");
     }
 
-    public static byte[] GetSHA256(byte[] aBytes)
+    public static byte[] GetRoundHash(ulong round)
     {
-      var H = new Sha256Digest();
-      H.BlockUpdate(aBytes, 0, aBytes.Length);
-      var hash = new byte[H.GetDigestSize()];
-      H.DoFinal(hash, 0);
-      return hash.Reverse().ToArray();
+      var rbytes_le = BitConverter.GetBytes(round);   //--> little-endian
+      var rbytes_be = rbytes_le.Reverse().ToArray();  //--> big-endian
+      var rHash = CryptoUtils.GetSHA256(rbytes_be);
+      return rHash;
+    }
+    public static G1 H1(ulong round)
+    {
+      var rHash=GetRoundHash(round);
+      var maptoPoint = new G1();
+      maptoPoint.HashAndMapTo(rHash);
+      Console.WriteLine($"HC: {maptoPoint.GetStr(16)}");
+      return maptoPoint;
     }
     public static BigInteger H3(byte[] a, byte[] b)
     {
       var pref = System.Text.Encoding.UTF8.GetBytes("IBE-H3");
       IEnumerable<byte> rv = pref.Concat(a).Concat(b);
-      var h3ret = GetSHA256(rv.ToArray());
+      var h3ret = CryptoUtils.GetSHA256(rv.ToArray());
 
       // We will hash iteratively: H(i || H("IBE-H3" || sigma || msg)) until we get a
       // value that is suitable as a scalar.
@@ -141,7 +149,7 @@ namespace tLockTest
         var data = h3ret;
         //byte[] ibytes = BitConverter.GetBytes(i);
         byte[] ibytes = new BigInteger(i.ToString(), 10).ToByteArray();
-        data = GetSHA256(ibytes.Concat(data).ToArray());
+        data = CryptoUtils.GetSHA256(ibytes.Concat(data).ToArray());
         data[0] = (byte)(data[0] >> BitsToMaskForBLS12381); //shift a destra di 1 byte del byte 0
         //if (BitConverter.IsLittleEndian) Array.Reverse(data);
         var n = new BigInteger(data);
@@ -151,46 +159,27 @@ namespace tLockTest
       throw new Exception("invalid proof: rP check failed");
     }
 
-    public static (G1 U, BigInteger V, BigInteger W) Encrypt_BLSonG2(int round, string PKLOEstring)
+    public static (G1 U, BigInteger V, BigInteger W) Encrypt_BLSonG2(ulong round, string PKLOEstring)
     {
       Init(BLS12_381);
       ETHmode();
-      /*
-      var SigLOEString = "9544ddce2fdbe8688d6f5b4f98eed5d63eee3902e7e162050ac0f45905a55657714880adabe3c3096b92767d886567d0";
-      var bytes_test = FromHexStr(SigLOEString);
-      var sha256_SigLOE = GetSHA256(bytes_test);
-      var bi_shatest = new BigInteger(sha256_SigLOE);
-      var sha256_SigLOEString = CryptoUtils.ConvertToBigInteger(bi_shatest).ToString("x2");
-      Console.WriteLine($"SHA256 {sha256_SigLOEString==randomness}");
-      */
-
-      //byte[] roundBytes = BitConverter.GetBytes(round);
-      //int roundBigEndian = BitConverter.ToInt32(BitConverter.GetBytes(round), 0);
-      //byte[] roundBigEndianBytes = BitConverter.GetBytes(roundBigEndian);
-      //if (BitConverter.IsLittleEndian) Array.Reverse(roundBigEndianBytes);
-
-      var bi_round = new BigInteger(round.ToString(), 10);
-      var bytes_Round = bi_round.ToByteArray();
-
-      mclBn_setMapToMode(MCL_MAP_TO_MODE_HASH_TO_CURVE);
       G2setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
+
       var HC = new G2();
-      HC.HashAndMapTo(GetSHA256(bytes_Round)); //H1(C)      
+      HC.HashAndMapTo(GetRoundHash(round)); //H1(C)      
       Console.WriteLine($"HC: {HC.GetStr(16)}");
 
-      //mclBn_setETHserialization(1);
-      var bytes_pkloe = Utils.FromHexStr(PKLOEstring);
+      var bytes_pkloe = CryptoUtils.FromHexStr(PKLOEstring);
       var PKLOE = new G1();
       PKLOE.Deserialize(bytes_pkloe);
       if (!PKLOE.IsValid()) throw new Exception("PKLOEstring not valid!");
       Console.WriteLine($"PKLOE: {PKLOE.ToCompressedPoint()}");
-      //mclBn_setETHserialization(0);
 
       var Gid = new GT();
       Gid.Pairing(PKLOE, HC);
 
       var messaggio = "Ciao Ali";
-      var sigma = Utils.GetSecureRandomNumber(messaggio.Length * 8);
+      var sigma = CryptoUtils.GetSecureRandomNumber(messaggio.Length * 8);
       var bytes_sigma = sigma.ToByteArray();
       var M = System.Text.Encoding.UTF8.GetBytes(messaggio); //  il messaggio deve essere max 256 bit (lunghezza massima dell'hash SHA256)
       var h3 = H3(bytes_sigma, M);
@@ -211,12 +200,12 @@ namespace tLockTest
 
       var Gid_pow_r = new GT();
       Gid_pow_r.Pow(Gid, r);
-      var h2 = GetSHA256(Gid_pow_r.Serialize());
+      var h2 = CryptoUtils.GetSHA256(Gid_pow_r.Serialize());
       var bi_h2 = new BigInteger(h2);
       var V = sigma.Xor(bi_h2);
 
       var bi_M = new BigInteger(M);
-      var h4 = GetSHA256(sigma.ToByteArray());
+      var h4 = CryptoUtils.GetSHA256(sigma.ToByteArray());
       var bi_h4 = new BigInteger(h4);
       var W = bi_M.Xor(bi_h4);
       return (U, V, W);
@@ -229,20 +218,20 @@ namespace tLockTest
       // Calcola sigma' = V xor H2(e(U,sigLOE))      
       var SigLOE = new G2();
       //mclBn_setETHserialization(1);
-      var bytes_SKLOE = Utils.FromHexStr(sigLOEstring);
+      var bytes_SKLOE = CryptoUtils.FromHexStr(sigLOEstring);
       SigLOE.Deserialize(bytes_SKLOE);
       if (!SigLOE.IsValid()) throw new Exception("SigLOEstring not valid!");
       Console.WriteLine($"SigLOE: {SigLOE.ToCompressedPoint()}");
       //mclBn_setETHserialization(0);
       var e = new GT();
       e.Pairing(cipherText.U, SigLOE);
-      var H2 = GetSHA256(e.Serialize());
+      var H2 = CryptoUtils.GetSHA256(e.Serialize());
       var bi_H2 = new BigInteger(H2);
       var sigma = cipherText.V.Xor(bi_H2);
       var bytes_sigma = sigma.ToByteArray();
 
       //Calcola M' = W XOR H4(sigma')
-      var H4 = GetSHA256(bytes_sigma);
+      var H4 = CryptoUtils.GetSHA256(bytes_sigma);
       var bi_H4 = new BigInteger(H4);
       var M = cipherText.W.Xor(bi_H4);
       var bytes_M = M.ToByteArray();
@@ -267,10 +256,11 @@ namespace tLockTest
       else return "ERROR!";
     }
 
-    public static (G2 U, BigInteger V, BigInteger W) Encrypt_BLSonG1(int round, string PKLOEstring, string message)
+    public static (G2 U, BigInteger V, BigInteger W) Encrypt_BLSonG1(ulong round, string PKLOEstring, string message)
     {
       Init(BLS12_381);
       ETHmode();
+      G1setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
 
       /*
       var SigLOEString = "9544ddce2fdbe8688d6f5b4f98eed5d63eee3902e7e162050ac0f45905a55657714880adabe3c3096b92767d886567d0";
@@ -281,38 +271,25 @@ namespace tLockTest
       Console.WriteLine($"SHA256 {sha256_SigLOEString==randomness}");
       */
 
-      //byte[] roundBytes = BitConverter.GetBytes(round);
-      //int roundBigEndian = BitConverter.ToInt32(BitConverter.GetBytes(round), 0);
-      //byte[] roundBigEndianBytes = BitConverter.GetBytes(roundBigEndian);
-      //if (BitConverter.IsLittleEndian) Array.Reverse(roundBigEndianBytes);
-
-      //Calcola H1(Sha256(round)) appartiene a G1
-      var fpRound = new Fp(); // Fr 32Byte -- Fp 48Byte
-      fpRound.SetInt(round);
-      var bytes_Round = fpRound.Serialize();
-      //var bi_round = new BigInteger(round.ToString(), 10);
-      //var bytes_Round = bi_round.ToByteArray();
-      G1setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
-      var HC = new G1();
-      HC.HashAndMapTo(bytes_Round);
-      Console.WriteLine($"HC: {HC.GetStr(16)}");
-
       // Carica P (chiave pubblica della rete drand di LOE)
-      var bytes_pkloe = Utils.FromHexStr(PKLOEstring);
+      var bytes_pkloe = CryptoUtils.FromHexStr(PKLOEstring);
       var PKLOE = new G2();
       PKLOE.Deserialize(bytes_pkloe);
       if (!PKLOE.IsValid()) throw new Exception("PKLOEstring not valid!");
-      Console.WriteLine($"PKLOE: {PKLOE.ToCompressedPoint() }");
+      Console.WriteLine($"PKLOE: {PKLOE.ToCompressedPoint()}");
 
-      //Calcola Gid=e(sha256(round), P)
+      //Calcola h1 = MAP_TO_POINT(SHA256(BIG_ENDIAN(round)))
+      var h1 = H1(round);
+
+      //Calcola Gid=e(P)
       var Gid = new GT();
-      Gid.Pairing(HC, PKLOE);
+      Gid.Pairing(h1, PKLOE);
       Console.WriteLine($"Gid: {Gid.GetStr(16)}");
       if (!Gid.IsValid()) throw new Exception("Gid is not valid!");
 
       //sceglie il valore casuale di sigma      
-      var sigma = Utils.GetSecureRandomNumber(message.Length * 8);
-      var bytes_sigma = sigma.ToByteArray();
+      var bytes_sigma = CryptoUtils.GetRndBytes(message.Length);
+      var sigma = new BigInteger(bytes_sigma);
 
       //Calcola r=H3(sigma,M)
       var M = System.Text.Encoding.UTF8.GetBytes(message); //  il messaggio deve essere max 256 bit (lunghezza massima dell'hash SHA256)
@@ -339,13 +316,13 @@ namespace tLockTest
       var Gid_pow_r = new GT();
       Gid_pow_r.Pow(Gid, r);
       if (!Gid_pow_r.IsValid()) throw new Exception("Gid_pow_r is not valid!");
-      var h2 = GetSHA256(Gid_pow_r.Serialize());
+      var h2 = CryptoUtils.GetSHA256(Gid_pow_r.Serialize());
       var bi_h2 = new BigInteger(h2);
       var V = sigma.Xor(bi_h2);
 
       //Calcola W=M XOR H4(sigma)
       var bi_M = new BigInteger(M);
-      var h4 = GetSHA256(bytes_sigma);
+      var h4 = CryptoUtils.GetSHA256(bytes_sigma);
       var bi_h4 = new BigInteger(h4);
       var W = bi_M.Xor(bi_h4);
       return (U, V, W);
@@ -358,20 +335,161 @@ namespace tLockTest
       // Calcola sigma' = V xor H2(e(sigLOE,U))      
       var SigLOE = new G1();
       //mclBn_setETHserialization(1);
-      var bytes_SKLOE = Utils.FromHexStr(sigLOEstring);
+      var bytes_SKLOE = CryptoUtils.FromHexStr(sigLOEstring);
       SigLOE.Deserialize(bytes_SKLOE);
       if (!SigLOE.IsValid()) throw new Exception("SigLOEstring not valid!");
       Console.WriteLine($"SigLOE: {SigLOE.ToCompressedPoint()}");
       //mclBn_setETHserialization(0);
       var e = new GT();
       e.Pairing(SigLOE, cipherText.U);
-      var H2 = GetSHA256(e.Serialize());
+      var H2 = CryptoUtils.GetSHA256(e.Serialize());
       var bi_H2 = new BigInteger(H2);
       var sigma = cipherText.V.Xor(bi_H2);
       var bytes_sigma = sigma.ToByteArray();
 
       //Calcola M' = W XOR H4(sigma')
-      var H4 = GetSHA256(bytes_sigma);
+      var H4 = CryptoUtils.GetSHA256(bytes_sigma);
+      var bi_H4 = new BigInteger(H4);
+      var M = cipherText.W.Xor(bi_H4);
+      var bytes_M = M.ToByteArray();
+
+      //r' = H3(sigma',M')
+      var bi_r = H3(bytes_sigma, bytes_M);
+      var bytes_r = bi_r.ToByteArray();
+      var r = new Fr();
+      r.Deserialize(bytes_r);
+      if (!r.IsValid()) throw new Exception("r not valid!");
+
+      // check U == r'G2
+      var g2Str = "1 0x24aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8 0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e 0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801 0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be";
+      //mclBn_setETHserialization(1);
+      var g2 = new G2();
+      g2.SetStr(g2Str, 16);
+      if (!g2.IsValid()) throw new Exception("g1 not valid!");
+      //mclBn_setETHserialization(0);
+      var U = new G2();
+      U.Mul(g2, r);
+      if (U.Equals(cipherText.U)) return System.Text.Encoding.UTF8.GetString(bytes_M);
+      else return "ERROR!";
+    }
+
+
+
+    // EncryptCPAonG1 implements the CPA identity-based encryption scheme from
+    // https://crypto.stanford.edu/~dabo/pubs/papers/bfibe.pdf for more information
+    // about the scheme.
+    // SigGroup = G2 (large secret identities)
+    // KeyGroup = G1 (short master public keys)
+    // P random generator of G1
+    // dist master key: s, Ppub = s*P \in G1
+    // H1: {0,1}^n -> G1
+    // H2: GT -> {0,1}^n
+    // ID: Qid = H1(ID) = xP \in G2
+    // 	secret did = s*Qid \in G2
+    // Encrypt:
+    // - random r scalar
+    // - Gid = e(Ppub, r*Qid) == e(P, P)^(x*s*r) \in GT
+    // 		 = GidT
+    // - U = rP \in G1,
+    // - V = M XOR H2(Gid)) = M XOR H2(GidT)  \in {0,1}^n
+    public static (G2 U, BigInteger V, BigInteger W) Encrypt_CPA_BLSonG1(ulong round, string PKLOEstring, string message)
+    {
+      Init(BLS12_381);
+      ETHmode();
+      G1setDst("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_");
+
+      /*
+      var SigLOEString = "9544ddce2fdbe8688d6f5b4f98eed5d63eee3902e7e162050ac0f45905a55657714880adabe3c3096b92767d886567d0";
+      var bytes_test = FromHexStr(SigLOEString);
+      var sha256_SigLOE = GetSHA256(bytes_test);
+      var bi_shatest = new BigInteger(sha256_SigLOE);
+      var sha256_SigLOEString = CryptoUtils.ConvertToBigInteger(bi_shatest).ToString("x2");
+      Console.WriteLine($"SHA256 {sha256_SigLOEString==randomness}");
+      */
+
+      // Carica P (chiave pubblica della rete drand di LOE)
+      var bytes_pkloe = CryptoUtils.FromHexStr(PKLOEstring);
+      var PKLOE = new G2();
+      PKLOE.Deserialize(bytes_pkloe);
+      if (!PKLOE.IsValid()) throw new Exception("PKLOEstring not valid!");
+      Console.WriteLine($"PKLOE: {PKLOE.ToCompressedPoint()}");
+
+      //Calcola h1 = MAP_TO_POINT(SHA256(BIG_ENDIAN(round)))
+      var Qid = H1(round);
+      var q = new System.Numerics.BigInteger(CryptoUtils.FromHexStr("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab"));
+      var g = CryptoUtils.GetGenerator(q);
+      var P = new G1();
+      P.Deserialize(g.ToByteArray());
+      var h1 = new G1();
+
+      //Calcola Gid=e(P)
+      var Gid = new GT();
+      Gid.Pairing(h1, PKLOE);
+      Console.WriteLine($"Gid: {Gid.GetStr(16)}");
+      if (!Gid.IsValid()) throw new Exception("Gid is not valid!");
+
+      //sceglie il valore casuale di sigma      
+      var bytes_sigma = CryptoUtils.GetRndBytes(message.Length);
+      var sigma = new BigInteger(bytes_sigma);
+
+      //Calcola r=H3(sigma,M)
+      var M = System.Text.Encoding.UTF8.GetBytes(message); //  il messaggio deve essere max 256 bit (lunghezza massima dell'hash SHA256)
+      var h3 = H3(bytes_sigma, M);
+      var bytes_h3 = h3.ToByteArray();
+
+      //Calcola C={U,V,W}
+
+      //Calcola U=rG2
+      //mclBn_setETHserialization(1);      
+      var g2Str = "1 0x24aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8 0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e 0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801 0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be";
+      var g2 = new G2(); //Zp
+      g2.SetStr(g2Str, 16);
+      if (!g2.IsValid()) throw new Exception("g1 not valid!");
+      //mclBn_setETHserialization(0);
+      var U = new G2();
+      var r = new Fr();
+      r.Deserialize(bytes_h3);
+      if (!r.IsValid()) throw new Exception("r is not valid!");
+      U.Mul(g2, r);
+      if (!U.IsValid()) throw new Exception("U is not valid!");
+
+      //Calcola V=sigma XOR H2(Gid^r)
+      var Gid_pow_r = new GT();
+      Gid_pow_r.Pow(Gid, r);
+      if (!Gid_pow_r.IsValid()) throw new Exception("Gid_pow_r is not valid!");
+      var h2 = CryptoUtils.GetSHA256(Gid_pow_r.Serialize());
+      var bi_h2 = new BigInteger(h2);
+      var V = sigma.Xor(bi_h2);
+
+      //Calcola W=M XOR H4(sigma)
+      var bi_M = new BigInteger(M);
+      var h4 = CryptoUtils.GetSHA256(bytes_sigma);
+      var bi_h4 = new BigInteger(h4);
+      var W = bi_M.Xor(bi_h4);
+      return (U, V, W);
+    }
+    public static string Decrypt_CPA_BLSonG1((G2 U, BigInteger V, BigInteger W) cipherText, string sigLOEstring)
+    {
+      Init(BLS12_381);
+      ETHmode();
+
+      // Calcola sigma' = V xor H2(e(sigLOE,U))      
+      var SigLOE = new G1();
+      //mclBn_setETHserialization(1);
+      var bytes_SKLOE = CryptoUtils.FromHexStr(sigLOEstring);
+      SigLOE.Deserialize(bytes_SKLOE);
+      if (!SigLOE.IsValid()) throw new Exception("SigLOEstring not valid!");
+      Console.WriteLine($"SigLOE: {SigLOE.ToCompressedPoint()}");
+      //mclBn_setETHserialization(0);
+      var e = new GT();
+      e.Pairing(SigLOE, cipherText.U);
+      var H2 = CryptoUtils.GetSHA256(e.Serialize());
+      var bi_H2 = new BigInteger(H2);
+      var sigma = cipherText.V.Xor(bi_H2);
+      var bytes_sigma = sigma.ToByteArray();
+
+      //Calcola M' = W XOR H4(sigma')
+      var H4 = CryptoUtils.GetSHA256(bytes_sigma);
       var bi_H4 = new BigInteger(H4);
       var M = cipherText.W.Xor(bi_H4);
       var bytes_M = M.ToByteArray();
